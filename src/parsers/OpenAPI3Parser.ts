@@ -42,7 +42,7 @@ export class OpenAPI3Parser implements SchemaParser {
     return output;
   }
 
-  private resolveSchema(schema: any): string {
+  private resolveSchema(schema: any, indent: number = 1): string {
     if (!schema) return "any";
 
     if (schema.$ref) {
@@ -50,12 +50,14 @@ export class OpenAPI3Parser implements SchemaParser {
     }
 
     if (schema.allOf) {
-      return schema.allOf.map((s: any) => this.resolveSchema(s)).join(" & ");
+      return schema.allOf
+        .map((s: any) => this.resolveSchema(s, indent))
+        .join(" & ");
     }
 
     if (schema.oneOf || schema.anyOf) {
       const parts = (schema.oneOf || schema.anyOf).map((s: any) =>
-        this.resolveSchema(s),
+        this.resolveSchema(s, indent),
       );
       return parts.join(" | ");
     }
@@ -78,10 +80,10 @@ export class OpenAPI3Parser implements SchemaParser {
         type = "boolean";
         break;
       case "array":
-        type = `${this.resolveSchema(schema.items)}[]`;
+        type = `${this.resolveSchema(schema.items, indent)}[]`;
         break;
       case "object":
-        type = this.generateObject(schema);
+        type = this.generateObject(schema, indent);
         break;
       default:
         type = "any";
@@ -94,26 +96,28 @@ export class OpenAPI3Parser implements SchemaParser {
     return type;
   }
 
-  private generateObject(schema: any): string {
+  private generateObject(schema: any, indent: number = 1): string {
     const properties = schema.properties || {};
     const required = schema.required || [];
     const additionalProperties = schema.additionalProperties;
+    const pad = "  ".repeat(indent);
+    const closingPad = "  ".repeat(indent - 1);
 
     let output = "{\n";
     for (const [propName, propSchema] of Object.entries(properties)) {
       const isRequired = required.includes(propName);
-      output += `  ${propName}${isRequired ? "" : "?"}: ${this.resolveSchema(propSchema)};\n`;
+      output += `${pad}${propName}${isRequired ? "" : "?"}: ${this.resolveSchema(propSchema, indent + 1)};\n`;
     }
 
     if (additionalProperties) {
       const valueType =
         additionalProperties === true
           ? "any"
-          : this.resolveSchema(additionalProperties);
-      output += `  [key: string]: ${valueType};\n`;
+          : this.resolveSchema(additionalProperties, indent + 1);
+      output += `${pad}[key: string]: ${valueType};\n`;
     }
 
-    output += "}";
+    output += `${closingPad}}`;
     return output;
   }
 
